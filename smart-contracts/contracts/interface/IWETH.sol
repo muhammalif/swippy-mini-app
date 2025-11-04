@@ -5,8 +5,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title IWETH
- * @dev Interface untuk WETH di Base Network. Mewarisi IERC20.
- * Ini memastikan semua fungsi transfer WETH aman dan sesuai standar.
+ * @dev Interface for WETH on Base Network. Inheriting IERC20.
+ * This ensures all WETH transfer functions are secure and up to standards.
  */
 interface IWETH is IERC20 {
     
