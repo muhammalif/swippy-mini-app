@@ -17,23 +17,23 @@ contract PredictionRegistry is Ownable, ReentrancyGuard {
     CompensationPool public immutable compensationPool;
     IWETH public immutable WETH;
 
-    // Alamat Relayer yang diizinkan memicu verifikasi
+    // Allowed Relayer Addresses trigger verification
     address public relayerAddress;
 
-    // Counter untuk prediction ID
+    // Counter for prediction ID
     uint256 public predictionCounter;
     
     TimelockController public timelock;
     AggregatorV3Interface public priceFeed;
 
-    // Mapping untuk menyimpan predictions
+    // Mapping to save predictions
     mapping(uint256 => Prediction) public predictions;
 
     // Game Parameter
     uint256 public constant SLIPPAGE_TOLERANCE_BP = 10;
     uint256 public constant LOCK_FEE = 0.0001 ether;
 
-    // Struktur untuk menyimpan state prediksi
+    // Structure for storing prediction states
     struct Prediction {
         address predictor;
         address tokenIn;
@@ -94,7 +94,7 @@ contract PredictionRegistry is Ownable, ReentrancyGuard {
 
 
     // --- Main Function ---
-    // Fungsi ini dipanggil oleh Mini App. User harus sudah approve WETH untuk Registry Contract.
+    // This function is called by the Mini App. The user must have approved WETH for the Registry Contract.
     function submitPredictionState(
         address _tokenIn,
         address _tokenOut,
@@ -113,7 +113,7 @@ contract PredictionRegistry is Ownable, ReentrancyGuard {
         // Validate fee transfer
         require(WETH.transferFrom(msg.sender, address(compensationPool), LOCK_FEE), "PR: WETH transfer failed (Lock Fee)");
 
-        // Mencatat State prediksi
+        // Recording the predicted State
         predictionCounter++;
         uint256 id = predictionCounter;
 
@@ -127,12 +127,11 @@ contract PredictionRegistry is Ownable, ReentrancyGuard {
             hasBeenVerified: false
         });
 
-        // Event ini akan di-pick up oleh Relayer untuk memantau transaksi swap yang akan datang
         emit PredictionSubmitted(id, msg.sender, _predictedSlippageBP, _expectedSwapTxHash);
     }
 
     // --- Verification Function ---
-    // Fungsi ini dipanggil oleh Relayer setelah Swap berhasil
+    // Function is called by the Relayer after a successful Swap.
     function verifyAndPayout(
         uint256 _predictionId,
         uint256 _amountOutActual,
@@ -143,7 +142,7 @@ contract PredictionRegistry is Ownable, ReentrancyGuard {
         require(_amountOutActual > 0, "PR: Invalid actual amount");
         require(_actualSlippageBP <= 10000, "PR: Invalid actual slippage"); // Max 100%
 
-        // Fetch oracle data for verification (assume oracle returns slippage in BP)
+        // Fetch oracle data for verification
         (, int256 oracleSlippage,,,) = priceFeed.latestRoundData();
         uint256 oracleSlippageBP = uint256(oracleSlippage);
         uint256 oracleDifference = oracleSlippageBP > _actualSlippageBP ? oracleSlippageBP - _actualSlippageBP : _actualSlippageBP - oracleSlippageBP;
@@ -153,11 +152,11 @@ contract PredictionRegistry is Ownable, ReentrancyGuard {
         require(p.predictor != address(0), "PR: Prediction not found");
         require(!p.hasBeenVerified, "PR: Already verified");
 
-        // Cek akurasi prediksi
+        // Check the accuracy of the prediction
         uint256 predictedBP = p.predictedSlippageBP;
         uint256 actualBP = _actualSlippageBP;
 
-        // Menghitung selisih absolut antara prediksi dan hasil aktual
+        // Calculate the absolute difference between the predicted and actual results.
         uint256 difference;
         if (actualBP > predictedBP) {
             difference = actualBP - predictedBP;
@@ -167,19 +166,18 @@ contract PredictionRegistry is Ownable, ReentrancyGuard {
 
         bool isAccurate = difference <= SLIPPAGE_TOLERANCE_BP;
 
-        // Menentukan Reward
+        // Determining Rewards
         if (isAccurate) {
-            // Reward: Kompensasi flat reward + pengembalian lock fee (contoh)
-            uint256 compensationAmount = LOCK_FEE + (LOCK_FEE / 2); // Reward 150% dari fee lock
+            // Reward
+            uint256 compensationAmount = LOCK_FEE + (LOCK_FEE / 2);
 
-            // Panggil Pool untuk Payout (gas disponsori oleh Paymaster)
+            // Call Pool for Payout (gas sponsored by Paymaster)
             compensationPool.payCompensation(payable(p.predictor), compensationAmount, _predictionId);
         } else {
             // Emit failure reason for transparency
             string memory reason = string(abi.encodePacked("Slippage difference: ", Strings.toString(difference), " BP > ", Strings.toString(SLIPPAGE_TOLERANCE_BP), " BP"));
             emit VerificationFailed(_predictionId, p.predictor, reason);
         }
-        // Jika kalah, lock fee tetap di Compensation Pool
 
         p.hasBeenVerified = true;
         emit VerificationResult(_predictionId, p.predictor, isAccurate, actualBP);
