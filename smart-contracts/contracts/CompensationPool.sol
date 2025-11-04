@@ -14,7 +14,7 @@ contract CompensationPool is Ownable, ReentrancyGuard {
     address public registryAddress;
     TimelockController public timelock;
 
-    // Events untuk transparansi dan monitoring oleh Relayer/Indexer
+    // Events for transparency and monitoring by Relayer/Indexer
     event FundsDeposited(address indexed token, address indexed user, uint256 amount);
     event CompensationPaid(address indexed recipient, uint256 amount, uint256 predictionId);
 
